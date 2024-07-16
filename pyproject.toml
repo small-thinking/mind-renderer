@@ -1,0 +1,39 @@
+[tool.poetry]
+name = "mind-renderer"
+version = "0.1.0"
+description = "An open-source project that aims to democratize video creation by harnessing the power of AI to translate thoughts into visual narratives."
+authors = ["Yx Jiang <2237303+yxjiang@users.noreply.github.com>"]
+license = "MIT"
+readme = "README.md"
+packages = [{include = "mind_renderer"}]
+
+[tool.poetry.dependencies]
+python = ">=3.10,<3.13"
+pydantic = "^2.8.2"
+polymind = "^0.0.56"
+notion-client = "^2.2.1"
+dspy-ai = "^2.4.12"
+load-dotenv = "^0.1.0"
+groq = "^0.9.0"
+
+[tool.poetry.group.dev.dependencies]
+black = "^24.4.2"
+isort = "^5.13.2"
+flake8 = "^7.1.0"
+pytest = "^8.2.2"
+coverage = "^7.6.0"
+
+[build-system]
+requires = ["poetry-core"]
+build-backend = "poetry.core.masonry.api"
+
+[tool.black]
+line-length = 120
+
+[tool.isort]
+skip = ["__init__.py"]
+
+[tool.flake8]
+max-line-length = 120
+exclude = ["__init__.py"]
+ignore = ["Q000", "E203"]
