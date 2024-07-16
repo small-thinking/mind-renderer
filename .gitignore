@@ -1,3 +1,8 @@
 .vscode
 outputs
 .env
+
+# cache
+**/.cache
+**/*.pyc
+**/__pycache__
