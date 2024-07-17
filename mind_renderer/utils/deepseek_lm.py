@@ -133,10 +133,6 @@ class DeepSeek(dspy.LM):
         Returns:
             list[dict[str, Any]]: list of completion choices
         """
-
-        assert only_completed, "for now"
-        assert return_sorted is False, "for now"
-
         response = self.request(prompt, **kwargs)
         self.logger.error(f"DeepSeek Response: {response}")
 
@@ -145,8 +141,8 @@ class DeepSeek(dspy.LM):
 
         completed_choices = [c for c in choices if c["finish_reason"] != "length"]
 
-        if only_completed and len(completed_choices):
-            choices = completed_choices
+        if only_completed:
+            choices = [c for c in choices if c["finish_reason"] != "length"]
 
         if kwargs.get("logprobs", False):
             completions = [{"text": self._get_choice_text(c), "logprobs": c["logprobs"]} for c in choices]
