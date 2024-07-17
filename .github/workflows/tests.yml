@@ -28,13 +28,13 @@ jobs:
       run: poetry install
     
     - name: Run Flake8
-      run: poetry run flake8 mind_renderer/
+      run: poetry run flake8 mind_renderer/ --config=pyproject.toml
     
     - name: Run isort
-      run: poetry run isort --check-only --diff .
+      run: poetry run isort --check-only --diff . --settings-path pyproject.toml
     
     - name: Run Black
-      run: poetry run black --check --diff .
+      run: poetry run black --check --diff . --config pyproject.toml
     
     - name: Run Pytest with coverage
       run: poetry run pytest -vv --cov=mind_renderer --cov-report=xml
