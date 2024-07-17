@@ -12,35 +12,32 @@ jobs:
   test:
     runs-on: ubuntu-latest
     steps:
-    - uses: actions/checkout@v2
+    - uses: actions/checkout@v3
     
     - name: Set up Python
-      uses: actions/setup-python@v2
+      uses: actions/setup-python@v4
       with:
-        python-version: '3.10'  # Adjust this to match your project's Python version
+        python-version: '3.10'
     
     - name: Install Poetry
-      run: |
-        python -m pip install --upgrade pip
-        pip install poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.5.1
     
     - name: Install dependencies
-      run: |
-        poetry install
+      run: poetry install
     
     - name: Run Flake8
       run: poetry run flake8 mind_renderer/
     
     - name: Run isort
-      run: poetry run isort --check-only .
+      run: poetry run isort --check-only --diff .
     
-    - name: Install pytest and coverage
-      run: |
-        poetry add pytest-cov
+    - name: Run Black
+      run: poetry run black --check --diff .
     
     - name: Run Pytest with coverage
-      run: |
-        poetry run pytest -vv --cov=mind_renderer --cov-report=xml
+      run: poetry run pytest -vv --cov=mind_renderer --cov-report=xml
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
