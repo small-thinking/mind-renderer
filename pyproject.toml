@@ -37,3 +37,19 @@ skip = ["__init__.py"]
 max-line-length = 120
 exclude = ["__init__.py"]
 ignore = ["Q000", "E203"]
+
+[tool.coverage.run]
+source = ["mind_renderer"]
+
+[tool.coverage.report]
+exclude_lines = [
+    "pragma: no cover",
+    "def __repr__",
+    "if self.debug:",
+    "if __name__ == .__main__.:",
+    "raise NotImplementedError",
+    "pass",
+    "except ImportError:",
+    "def __str__"
+]
+ignore_errors = true
