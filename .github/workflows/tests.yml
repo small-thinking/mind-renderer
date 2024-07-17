@@ -1,38 +1,52 @@
-name: Python Tests and Coverage
-
+name: Run Tests and Linting
 on:
   push:
-    branches: [ main ]
+    branches:
+      - main
   pull_request:
-    branches: [ main ]
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
 
 jobs:
   test:
     runs-on: ubuntu-latest
-    strategy:
-      matrix:
-        python-version: ['3.10']
-
     steps:
     - uses: actions/checkout@v2
-    - name: Set up Python ${{ matrix.python-version }}
+    
+    - name: Set up Python
       uses: actions/setup-python@v2
       with:
-        python-version: ${{ matrix.python-version }}
+        python-version: '3.10'  # Adjust this to match your project's Python version
+    
     - name: Install Poetry
       run: |
-        curl -sSL https://install.python-poetry.org | python3 -
-        echo "$HOME/.local/bin" >> $GITHUB_PATH
+        python -m pip install --upgrade pip
+        pip install poetry
+    
     - name: Install dependencies
       run: |
         poetry install
-    - name: Run tests with pytest and coverage
+    
+    - name: Run Flake8
+      run: poetry run flake8 mind_renderer/
+    
+    - name: Run isort
+      run: poetry run isort --check-only .
+    
+    - name: Install pytest and coverage
       run: |
-        poetry run pytest --cov=mind_renderer --cov-report=xml
+        poetry add pytest-cov
+    
+    - name: Run Pytest with coverage
+      run: |
+        poetry run pytest -vv --cov=mind_renderer --cov-report=xml
+    
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
       with:
         fail_ci_if_error: true
+    
     - name: Check coverage threshold
       run: |
         coverage_percentage=$(poetry run coverage report | grep TOTAL | awk '{print $4}' | sed 's/%//')
