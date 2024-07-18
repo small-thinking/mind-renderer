@@ -165,7 +165,8 @@ class ThumbnailGenerator(dspy.Module):
         self.logger = Logger(__name__)
         self.config = config
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.save_folder = config.get("thumbnail_save_folder", "outputs/thumbnails")
+        self.root_save_folder = config.get("root_save_folder", "outputs")
+        self.save_folder = config.get("thumbnail_save_folder", "thumbnails")
 
     def forward(self, story_piece: StoryPiece) -> None:
         """Generate the thumbnail for the given story piece."""
@@ -190,10 +191,11 @@ class ThumbnailGenerator(dspy.Module):
         )
 
         image_url = response.data[0].url
-        save_path = os.path.join(self.save_folder, f"thumbnail_{story_piece.idx}.png")
+        thumbnail_path = os.path.join(self.save_folder, f"thumbnail_{story_piece.idx}.png")
+        save_path = os.path.join(self.root_save_folder, thumbnail_path)
 
         downloaded_path = download_and_save_image(image_url, save_path)
-        story_piece.image_uri = downloaded_path
+        story_piece.image_uri = thumbnail_path
 
         self.logger.info(f"Generated thumbnail for story piece {story_piece.idx}, saved at: {downloaded_path}")
 

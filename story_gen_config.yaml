@@ -3,7 +3,7 @@ story: >
 
 # Save folder
 root_save_folder: "outputs"
-thumbnail_save_folder: "outputs/thumbnails"
+thumbnail_save_folder: "thumbnails"
 
 # The number of sections or episodes in the story
 num_sections: 3
