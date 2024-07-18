@@ -22,7 +22,9 @@ def main():
     story = story_generator.generate()
 
     logger.info("Generated story:")
-    print(story)
+    save_folder = story_generator.config.get("output_path", "outputs")
+    markdown_path = os.path.join(save_folder, "story.md")
+    story.to_markdown(markdown_path)
 
 
 if __name__ == "__main__":

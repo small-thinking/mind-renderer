@@ -61,3 +61,18 @@ class Story:
 
     def __str__(self):
         return "\n".join([f"Episode {idx}:\n{str(piece)}\n" for idx, piece in enumerate(self.pieces)])
+
+    def to_markdown(self, file_path: str):
+        with open(file_path, "w") as file:
+            file.write(f"# {self.genres}\n")
+            for idx, piece in enumerate(self.pieces):
+                file.write(f"## Episode {idx}\n")
+                file.write(f"{piece.text}\n")
+                if piece.image_uri:
+                    file.write(f"![image](./{piece.image_uri})\n")
+                if piece.audio_uri:
+                    file.write(f"![audio](./{piece.audio_uri})\n")
+                if piece.video_uri:
+                    file.write(f"![video](./{piece.video_uri})\n")
+                file.write("\n")
+        return file_path
