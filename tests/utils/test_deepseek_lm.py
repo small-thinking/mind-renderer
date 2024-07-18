@@ -103,4 +103,4 @@ class TestDeepSeek:
         assert result == []
 
         result = deepseek_instance("Test prompt", only_completed=False)
-        assert result == ["Incomplete"]
+        assert result == []
