@@ -37,8 +37,3 @@ jobs:
     
     - name: Run Pytest with coverage
       run: poetry run pytest -vv --cov=mind_renderer --cov-config=pyproject.toml -vv tests
-    
-    - name: Upload coverage to Codecov
-      uses: codecov/codecov-action@v3
-      with:
-        fail_ci_if_error: true
