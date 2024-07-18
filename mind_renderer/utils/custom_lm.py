@@ -3,6 +3,7 @@
 
 import json
 import logging
+import os
 from typing import Any, Literal, Optional
 
 import backoff
@@ -10,6 +11,19 @@ import dspy
 import requests
 
 from mind_renderer.utils.logger import Logger
+
+
+def init_lm(text_model_config: dict[str, str]) -> dspy.LM:
+    """Initialize the language model based on the configuration."""
+    provider = text_model_config["provider"]
+    lm_name = text_model_config["lm_name"]
+    section_length = text_model_config.get("section_length", 1000)
+    if provider == "DeepSeek":
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=section_length)
+    elif provider == "GROQ":
+        api_key = os.getenv("GROQ_API_KEY")
+    return dspy.__dict__[provider](model=lm_name, max_tokens=section_length, api_key=api_key)
 
 
 class DeepSeek(dspy.LM):

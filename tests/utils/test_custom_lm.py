@@ -7,7 +7,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 import requests
 
-from mind_renderer.utils.deepseek_lm import DeepSeek
+from mind_renderer.utils.custom_lm import DeepSeek
 
 
 class TestDeepSeek:

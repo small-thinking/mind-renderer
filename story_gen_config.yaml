@@ -1,8 +1,12 @@
 story: >
   写一个儿童故事，用于正面影响小朋友注意卫生。并且喜欢吃蔬菜。
 
+# Save folder
+root_save_folder: "outputs"
+thumbnail_save_folder: "thumbnails"
+
 # The number of sections or episodes in the story
-num_sections: 2
+num_sections: 3
 section_length: 1000
 
 # Comma-separated list of genres for the story
