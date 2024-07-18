@@ -4,9 +4,7 @@ according to the requirement of the user. It will be the main interface for the 
 
 import json
 import os
-import re
 from abc import abstractmethod
-from typing import Any, Dict, List
 
 import dspy
 from dotenv import load_dotenv
@@ -17,7 +15,7 @@ from mind_renderer.utils.deepseek_lm import DeepSeek
 from mind_renderer.utils.logger import Logger
 
 
-def init_lm(text_model_config: Dict[str, str]) -> dspy.LM:
+def init_lm(text_model_config: dict[str, str]) -> dspy.LM:
     """Initialize the language model based on the configuration."""
     provider = text_model_config["provider"]
     lm_name = text_model_config["lm_name"]
@@ -35,12 +33,13 @@ class StorySketchGenerator(dspy.Module):
 
     instruction: str = """
         You are the story sketching assistant. Please follow the below instruction:
-        
-        1. Generate the sketch in the SAME language as the user input, e.g. if user input is Chinese, generate sketch in Chinese.
+
+        1. Generate the sketch in the SAME language as the user input,
+            e.g. generate Chinese sketch if user input is Chinese.
         2. Generate the story_worldview and the detailed piece-level prompts based on the simple prompt.
             The story_worldview is the high-level description of the story, used to make each piece consistent.
             Each of the detailed piece-level prompts will be used to generate a piece of the story.
-        3. Each episode should be coherent and complementary. 
+        3. Each episode should be coherent and complementary.
         4. The story in combination should be complete. So the story pieces can be logically connected.
         5. Generate the prompt in the same language as the input prompt.
     """
@@ -61,7 +60,7 @@ class StorySketchGenerator(dspy.Module):
             """
         )
 
-    def __init__(self, config: Dict[str, Any], text_model_config: Dict[str, str]):
+    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
         self.text_model_config = text_model_config
         self.lm = init_lm(self.text_model_config)
@@ -107,7 +106,7 @@ class TextGenerator(dspy.Module):
             desc="The actual story section. Use the same language as the story description."
         )  # The output text of the story.
 
-    def __init__(self, config: Dict[str, Any], text_model_config: Dict[str, str]):
+    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
         self.config = config
         self.text_model_config = text_model_config
@@ -167,7 +166,7 @@ class StoryGenerator(dspy.Module):
         **kwargs,
     ):
         load_dotenv(override=True)
-        self.state: Dict[str, Any]
+        self.state: dict[str, any]
         self.logger = Logger(__name__)
         self.genres = genres
         self.writing_style = writing_style

@@ -119,7 +119,6 @@ class DeepSeek(dspy.LM):
     def __call__(
         self,
         prompt: str,
-        only_completed: bool = True,
         return_sorted: bool = False,
         **kwargs,
     ) -> list[dict[str, Any]]:
@@ -127,8 +126,7 @@ class DeepSeek(dspy.LM):
 
         Args:
             prompt (str): prompt to send to DeepSeek
-            only_completed (bool, optional): return only completed responses and ignores completion due to length. Defaults to True.
-            return_sorted (bool, optional): sort the completion choices using the returned probabilities. Defaults to False.
+            return_sorted (bool, optional): sort the completion choices using the returned probabilities.
 
         Returns:
             list[dict[str, Any]]: list of completion choices
@@ -139,10 +137,7 @@ class DeepSeek(dspy.LM):
         self.log_usage(response)
         choices = response["choices"]
 
-        completed_choices = [c for c in choices if c["finish_reason"] != "length"]
-
-        if only_completed:
-            choices = [c for c in choices if c["finish_reason"] != "length"]
+        choices = [c for c in choices if c["finish_reason"] != "length"]
 
         if kwargs.get("logprobs", False):
             completions = [{"text": self._get_choice_text(c), "logprobs": c["logprobs"]} for c in choices]

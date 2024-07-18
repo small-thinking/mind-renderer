@@ -19,7 +19,7 @@ groq = "^0.9.0"
 [tool.poetry.group.dev.dependencies]
 black = "^24.4.2"
 isort = "^5.13.2"
-flake8 = "^7.1.0"
+flake8 = "7.1.0"
 pytest = "^8.2.2"
 coverage = "^7.6.0"
 
@@ -33,23 +33,8 @@ line-length = 120
 [tool.isort]
 skip = ["__init__.py"]
 
-[tool.flake8]
-max-line-length = 120
-exclude = ["__init__.py"]
-ignore = ["Q000", "E203"]
-
 [tool.coverage.run]
 source = ["mind_renderer"]
 
 [tool.coverage.report]
-exclude_lines = [
-    "pragma: no cover",
-    "def __repr__",
-    "if self.debug:",
-    "if __name__ == .__main__.:",
-    "raise NotImplementedError",
-    "pass",
-    "except ImportError:",
-    "def __str__"
-]
 ignore_errors = true
