@@ -250,7 +250,7 @@ class OneStepStoryGenerator(StoryGenerator):
     def __init__(self, config_path: str):
         self.logger = Logger(__name__)
         self.config_loader = ConfigLoader(config_path)
-        config = self.config_loader.get_config()
+        self.config = self.config_loader.get_config()
         text_model_config = self.config_loader.get_text_model_config()
 
         super().__init__(
