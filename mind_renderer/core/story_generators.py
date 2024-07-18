@@ -4,9 +4,7 @@ according to the requirement of the user. It will be the main interface for the 
 
 import json
 import os
-import re
 from abc import abstractmethod
-from typing import Any, Dict, List
 
 import dspy
 from dotenv import load_dotenv
@@ -15,6 +13,71 @@ from mind_renderer.core.entities import Story, StoryPiece
 from mind_renderer.utils.config_loader import ConfigLoader
 from mind_renderer.utils.deepseek_lm import DeepSeek
 from mind_renderer.utils.logger import Logger
+
+
+def init_lm(text_model_config: dict[str, str]) -> dspy.LM:
+    """Initialize the language model based on the configuration."""
+    provider = text_model_config["provider"]
+    lm_name = text_model_config["lm_name"]
+    section_length = text_model_config.get("section_length", 1000)
+    if provider == "DeepSeek":
+        api_key = os.getenv("DEEPSEEK_API_KEY")
+        return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=section_length)
+    elif provider == "GROQ":
+        api_key = os.getenv("GROQ_API_KEY")
+    return dspy.__dict__[provider](model=lm_name, max_tokens=section_length, api_key=api_key)
+
+
+class StorySketchGenerator(dspy.Module):
+    """StorySketchGenerator is used to expand a simple prompt into detailed piece-level prompts."""
+
+    instruction: str = """
+        You are the story sketching assistant. Please follow the below instruction:
+
+        1. Generate the sketch in the SAME language as the user input,
+            e.g. generate Chinese sketch if user input is Chinese.
+        2. Generate the story_worldview and the detailed piece-level prompts based on the simple prompt.
+            The story_worldview is the high-level description of the story, used to make each piece consistent.
+            Each of the detailed piece-level prompts will be used to generate a piece of the story.
+        3. Each episode should be coherent and complementary.
+        4. The story in combination should be complete. So the story pieces can be logically connected.
+        5. Generate the prompt in the same language as the input prompt.
+    """
+
+    class SketchGenerateSignature(dspy.Signature):
+        """Signature for the generate method."""
+
+        instruction: str = dspy.InputField(desc="The instruction for the generation.")
+        simple_prompt: str = dspy.InputField(desc="The user instruction on how the story would look like.")
+        num_sections: str = dspy.InputField(desc="The number of episodes the story should have.")
+        story_worldview: str = dspy.OutputField(desc="The world view of the story.")
+        prompts: str = dspy.OutputField(
+            desc="""
+            The json blob that contains a list of prompts for each piece of the story, they should be coherent, e.g.
+            {
+                "prompts": ["prompt1", "prompt2", "prompt3"]
+            }
+            """
+        )
+
+    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
+        self.logger = Logger(__name__)
+        self.text_model_config = text_model_config
+        self.lm = init_lm(self.text_model_config)
+        self.sketch_inspect_length = int(os.getenv("SKETCH_INSPECT_LENGTH", 0))
+
+    def forward(self, simple_prompt: str, num_sections: int, **kwargs):
+        """Generate the detailed piece-level prompts based on the simple prompt."""
+        return self.generate(simple_prompt=simple_prompt, num_sections=str(num_sections), **kwargs)
+
+    def generate(self, simple_prompt: str, num_sections: int, **kwargs):
+        """Generate the detailed piece-level prompts based on the simple prompt."""
+        sketch_gen = dspy.Predict(self.SketchGenerateSignature)
+        with dspy.context(lm=self.lm):
+            response = sketch_gen(instruction=self.instruction, simple_prompt=simple_prompt, num_sections=num_sections)
+            if self.sketch_inspect_length:
+                self.lm.inspect_history(n=self.sketch_inspect_length)
+            return response
 
 
 class TextGenerator(dspy.Module):
@@ -43,22 +106,14 @@ class TextGenerator(dspy.Module):
             desc="The actual story section. Use the same language as the story description."
         )  # The output text of the story.
 
-    def __init__(self, config: Dict[str, Any], text_model_config: Dict[str, str]):
+    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
         self.config = config
         self.text_model_config = text_model_config
-        self.lm = self._init_lm()
+        self.lm = init_lm(self.text_model_config)
         self.genres = config["genres"]
         self.writing_style = config["writing_style"]
         self.gen_thumbnail_prompt = config["gen_thumbnail"]
-
-    def _init_lm(self) -> dspy.LM:
-        provider = self.text_model_config["provider"]
-        lm_name = self.text_model_config["lm_name"]
-        if provider == "DeepSeek":
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=1000)
-        return dspy.__dict__[provider](model=lm_name, max_tokens=1000)
 
     def forward(self, prompt: str, story_worldview: str, story_piece: StoryPiece, **kwargs) -> None:
         """Generate the element based on the prompt and populate the story piece with the generated element."""
@@ -82,7 +137,6 @@ class TextGenerator(dspy.Module):
         Returns:
             Any: The generated element.
         """
-        # story_gen = dspy.Predict(self.TextGenerateSignature)
         story_gen = dspy.ChainOfThought(self.TextGenerateSignature)
         with dspy.context(lm=self.lm):
             response = story_gen(
@@ -93,67 +147,8 @@ class TextGenerator(dspy.Module):
                 story_writing_style=self.writing_style,
                 should_gen_thumbnail_prompt=str(self.gen_thumbnail_prompt),
             )
-            self.lm.inspect_history(n=1)
             story_piece.text = response.story_text
             story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt
-
-
-class StorySketchGenerator(dspy.Module):
-    """StorySketchGenerator is used to expand a simple prompt into detailed piece-level prompts."""
-
-    instruction: str = """
-        You are the story sketching assistant. Please follow the below instruction:
-        
-        1. Generate the story_worldview and the detailed piece-level prompts based on the simple prompt.
-            The story_worldview is the high-level description of the story, used to make each piece consistent.
-            Each of the detailed piece-level prompts will be used to generate a piece of the story.
-        2. Make the storyline coherent, complete, but not repetitive. So the story pieces can be logically connected.
-        3. Generate the prompt in the same language as the input prompt.
-    """
-
-    class SketchGenerateSignature(dspy.Signature):
-        """Signature for the generate method."""
-
-        instruction: str = dspy.InputField(desc="The instruction for the generation.")
-        simple_prompt: str = dspy.InputField(desc="The user instruction on how the story would look like.")
-        num_sections: str = dspy.InputField(desc="The number of episodes the story should have.")
-        story_worldview: str = dspy.OutputField(desc="The world view of the story.")
-        prompts: str = dspy.OutputField(
-            desc="""
-            The json blob that contains a list of prompts for each piece of the story, they should be coherent, e.g.
-            {
-                "prompts": ["prompt1", "prompt2", "prompt3"]
-            }
-            """
-        )
-
-    def __init__(self, config: Dict[str, Any], text_model_config: Dict[str, str]):
-        self.logger = Logger(__name__)
-        self.config = config
-        self.text_model_config = text_model_config
-        self.lm = self._init_lm()
-        self.sketch_inspect_length = int(os.getenv("SKETCH_INSPECT_LENGTH", 0))
-
-    def _init_lm(self) -> dspy.LM:
-        provider = self.text_model_config["provider"]
-        lm_name = self.text_model_config["lm_name"]
-        if provider == "DeepSeek":
-            api_key = os.getenv("DEEPSEEK_API_KEY")
-            return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=1000)
-        return dspy.__dict__[provider](model=lm_name, max_tokens=1000)
-
-    def forward(self, simple_prompt: str, num_sections: int, **kwargs):
-        """Generate the detailed piece-level prompts based on the simple prompt."""
-        return self.generate(simple_prompt=simple_prompt, num_sections=str(num_sections), **kwargs)
-
-    def generate(self, simple_prompt: str, num_sections: int, **kwargs):
-        """Generate the detailed piece-level prompts based on the simple prompt."""
-        sketch_gen = dspy.Predict(self.SketchGenerateSignature)
-        with dspy.context(lm=self.lm):
-            response = sketch_gen(instruction=self.instruction, simple_prompt=simple_prompt, num_sections=num_sections)
-            if self.sketch_inspect_length:
-                self.lm.inspect_history(n=self.sketch_inspect_length)
-            return response
 
 
 class StoryGenerator(dspy.Module):
@@ -171,7 +166,7 @@ class StoryGenerator(dspy.Module):
         **kwargs,
     ):
         load_dotenv(override=True)
-        self.state: Dict[str, Any]
+        self.state: dict[str, any]
         self.logger = Logger(__name__)
         self.genres = genres
         self.writing_style = writing_style

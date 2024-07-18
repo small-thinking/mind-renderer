@@ -1,0 +1,39 @@
+name: Run Tests and Linting
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    types: [opened, synchronize, reopened, ready_for_review]
+    branches:
+      - main
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+    
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+    
+    - name: Install Poetry
+      uses: snok/install-poetry@v1
+      with:
+        version: 1.5.1
+    
+    - name: Install dependencies
+      run: poetry install
+    
+    - name: Run Flake8
+      working-directory: ./
+      run: poetry run flake8 mind_renderer/
+    
+    - name: Run isort and black
+      working-directory: ./
+      run: poetry run isort . && poetry run black .
+    
+    - name: Run Pytest with coverage
+      run: poetry run pytest -vv --cov=mind_renderer --cov-config=pyproject.toml -vv tests
