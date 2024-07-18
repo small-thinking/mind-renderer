@@ -254,16 +254,16 @@ class OneStepStoryGenerator(StoryGenerator):
         text_model_config = self.config_loader.get_text_model_config()
 
         super().__init__(
-            genres=config.get("genres", ""),
-            writing_style=config.get("writing_style", ""),
-            gen_thumbnail_prompt=config.get("gen_thumbnail", False),
+            genres=self.config.get("genres", ""),
+            writing_style=self.config.get("writing_style", ""),
+            gen_thumbnail_prompt=self.config.get("gen_thumbnail", False),
             provider=text_model_config.get("provider"),
             lm_name=text_model_config.get("lm_name"),
         )
 
-        self.story_sketch_generator = StorySketchGenerator(config=config, text_model_config=text_model_config)
-        self.text_generator = TextGenerator(config=config, text_model_config=text_model_config)
-        self.thumbnail_generator = ThumbnailGenerator(config=config)
+        self.story_sketch_generator = StorySketchGenerator(config=self.config, text_model_config=text_model_config)
+        self.text_generator = TextGenerator(config=self.config, text_model_config=text_model_config)
+        self.thumbnail_generator = ThumbnailGenerator(config=self.config)
 
     def generate(self, prev_version: Story = None, **kwargs) -> Story:
         config = self.config_loader.get_config()
