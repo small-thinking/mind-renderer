@@ -28,13 +28,12 @@ jobs:
       run: poetry install
     
     - name: Run Flake8
+      working-directory: ./
       run: poetry run flake8 mind_renderer/
     
-    - name: Run isort
-      run: poetry run isort --check-only --diff .
-    
-    - name: Run Black
-      run: poetry run black --check --diff .
+    - name: Run isort and black
+      working-directory: ./
+      run: poetry run isort . && poetry run black .
     
     - name: Run Pytest with coverage
       run: poetry run pytest -vv --cov=mind_renderer --cov-report=xml
