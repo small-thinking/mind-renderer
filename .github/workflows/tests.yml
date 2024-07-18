@@ -36,7 +36,7 @@ jobs:
       run: poetry run isort . && poetry run black .
     
     - name: Run Pytest with coverage
-      run: poetry run pytest -vv --cov=mind_renderer --cov-report=xml
+      run: poetry run pytest -vv --cov=mind_renderer --cov-config=pyproject.toml -vv tests
     
     - name: Upload coverage to Codecov
       uses: codecov/codecov-action@v3
