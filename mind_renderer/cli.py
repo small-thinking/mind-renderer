@@ -5,7 +5,6 @@ Run the following command to generate the story:
 """
 
 import argparse
-import os
 
 from mind_renderer.core.story_generators import OneStepStoryGenerator
 from mind_renderer.utils.logger import Logger
