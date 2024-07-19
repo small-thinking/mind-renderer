@@ -85,6 +85,7 @@ class TextGenerator(dspy.Module):
     instructions = """
     You are the story writing assistant. Your goal is to generate a story piece a time based on the prompt.
     Please generate the story piece in the SAME language as the input prompt.
+    Please put the clean generated text in the output field.
     """
 
     class TextGenerateSignature(dspy.Signature):
