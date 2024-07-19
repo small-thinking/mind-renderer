@@ -1,6 +1,8 @@
 """Defines the entities of a story.
 """
 
+import os
+import time
 from typing import List
 
 
@@ -42,19 +44,35 @@ class StoryPiece:
 class Story:
     """A story is a collection of story pieces."""
 
-    def __init__(self, genres: str, visual_style: str = None, audio_style: str = None, pieces: List[StoryPiece] = None):
+    def __init__(
+        self,
+        config: dict[str, any],
+        title: str,
+        genres: str,
+        visual_style: str = None,
+        audio_style: str = None,
+        pieces: List[StoryPiece] = None,
+    ):
         """
 
         Args:
+            title (str): The title of the story.
             genres (str): The genres of the story.
             visual_style (str, optional): The visual style of the story, e.g. cartoon, simple color. Defaults to None.
             audio_style (str, optional): The audio style of the story, story telling. Defaults to None.
             pieces (List[StoryPiece], optional): The pieces of the story. Defaults to None.
         """
+        # Created timestamp
+        self.created_timestamp = str(int(time.time()))
+        self.title = title
         self.genres = genres
         self.visual_style = visual_style
         self.audio_style = audio_style
-        self.pieces = pieces
+        self.pieces = pieces or []
+        story_folder_name = os.path.join(f"{self.created_timestamp}-{self.title}")
+        self.story_folder_path = os.path.join(config.get("output_path", "outputs"), story_folder_name)
+        # Create the story folder
+        os.makedirs(self.story_folder_path, exist_ok=True)
 
     def add_piece(self, piece: StoryPiece):
         self.pieces.append(piece)
@@ -62,9 +80,11 @@ class Story:
     def __str__(self):
         return "\n".join([f"Episode {idx}:\n{str(piece)}\n" for idx, piece in enumerate(self.pieces)])
 
-    def to_markdown(self, file_path: str):
+    def to_markdown(self):
+        file_path = os.path.join(self.story_folder_path, "story.md")
         with open(file_path, "w") as file:
-            file.write(f"# {self.genres}\n")
+            file.write(f"# {self.title}\n")
+            file.write(f"### {self.genres}\n")
             for idx, piece in enumerate(self.pieces):
                 file.write(f"## Episode {idx}\n")
                 file.write(f"{piece.text}\n")
