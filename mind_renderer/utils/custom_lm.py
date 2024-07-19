@@ -23,6 +23,8 @@ def init_lm(text_model_config: dict[str, str]) -> dspy.LM:
         return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=section_length)
     elif provider == "GROQ":
         api_key = os.getenv("GROQ_API_KEY")
+    elif provider == "OpenAI":
+        api_key = os.getenv("OPENAI_API_KEY")
     return dspy.__dict__[provider](model=lm_name, max_tokens=section_length, api_key=api_key)
 
 

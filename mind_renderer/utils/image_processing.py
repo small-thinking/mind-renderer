@@ -1,8 +1,10 @@
 import os
 
 import requests
+import retrying
 
 
+@retrying.retry(wait_fixed=5000, stop_max_attempt_number=3)
 def download_and_save_image(url: str, save_path: str) -> str:
     """Download an image from a URL and save it to the specified folder path."""
     try:

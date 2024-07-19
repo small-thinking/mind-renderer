@@ -7,6 +7,7 @@ import os
 from abc import abstractmethod
 
 import dspy
+import retrying
 from dotenv import load_dotenv
 from openai import OpenAI
 
@@ -23,14 +24,15 @@ class StorySketchGenerator(dspy.Module):
     instruction: str = """
         You are the story sketching assistant. Please follow the below instruction:
 
+        0. Generate a sketch for a multi-section story according to the specified number of sections.
         1. Generate the sketch in the SAME language as the user input,
             e.g. generate Chinese sketch if user input is Chinese.
         2. Generate the story_worldview and the detailed piece-level prompts based on the simple prompt.
             The story_worldview is the high-level description of the story, used to make each piece consistent.
             Each of the detailed piece-level prompts will be used to generate a piece of the story.
-        3. Each episode should be coherent and complementary.
+        3. Each section should be coherent and complementary of the others.
         4. The story in combination should be complete. So the story pieces can be logically connected.
-        5. Generate the prompt in the same language as the input prompt.
+        5. Generate the prompt per section in the same language as the input prompt.
     """
 
     class SketchGenerateSignature(dspy.Signature):
@@ -40,16 +42,19 @@ class StorySketchGenerator(dspy.Module):
         simple_prompt: str = dspy.InputField(desc="The user instruction on how the story would look like.")
         num_sections: str = dspy.InputField(
             desc="""
-                The number of episodes the story should have. Each episode describe one scene.
-                Consequtive episodes should be coherent and complementary.
+                The number of sections the story should have. Each section describe one scene.
+                Consequtive sections should be coherent and complementary.
             """
+        )
+        story_title: str = dspy.OutputField(
+            desc="The title of the story. Should be short and catchy. In the same language as the input prompt."
         )
         story_worldview: str = dspy.OutputField(desc="The world view of the story. Used to ensure consistency.")
         prompts: str = dspy.OutputField(
             desc="""
             The blob that contains a list of prompts for each piece of the story, they should be coherent, e.g.
             {
-                "prompts": ["prompt1", "prompt2", "prompt3"]
+                "prompts": ["prompt1", "prompt2", ...]
             }
             """
         )
@@ -95,12 +100,12 @@ class TextGenerator(dspy.Module):
         )
         prev_piece: str = dspy.InputField(desc="The previous piece of the story. For continuity.")
 
+        story_text: str = dspy.OutputField(
+            desc="The actual story content. Use the same language as the story description."
+        )  # The output text of the story.
         thumbnail_generation_prompt: str = dspy.OutputField(
             desc="The cohensive prompt for generating the thumbnail image in English only. Use descriptive keywords."
         )
-        story_text: str = dspy.OutputField(
-            desc="The actual story section. Use the same language as the story description."
-        )  # The output text of the story.
 
     def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
@@ -123,6 +128,10 @@ class TextGenerator(dspy.Module):
             **kwargs,
         )
 
+    @retrying.retry(
+        wait_fixed=5000,
+        stop_max_attempt_number=3,
+    )
     def generate(
         self,
         story_description: str,
@@ -131,31 +140,30 @@ class TextGenerator(dspy.Module):
         prev_piece: StoryPiece = None,
         **kwargs,
     ) -> None:
-        """Generate the element based on the story_description and populate the story piece with the generated element.
+        try:
+            self.logger.info("Attempting to generate story piece...")
+            story_gen = dspy.ChainOfThoughtWithHint(self.TextGenerateSignature)
 
-        Args:
-            story_description (str): The description of the story at the high level.
-            story_worldview (str): The story_worldview of the story.
-            gen_thumbnail_prompt (bool): Whether to generate the thumbnail prompt.
-            story_piece (StoryPiece): The story piece to populate with the generated element.
-            prev_piece (StoryPiece): The previous piece of the story.
-
-        Returns:
-            Any: The generated element.
-        """
-        story_gen = dspy.ChainOfThought(self.TextGenerateSignature)
-        with dspy.context(lm=self.lm):
-            response = story_gen(
-                instruction=self.instructions,
-                story_description=story_description,
-                story_worldview=story_worldview,
-                story_genres=self.genres,
-                story_writing_style=self.writing_style,
-                should_gen_thumbnail_prompt=str(self.gen_thumbnail_prompt),
-                prev_piece=prev_piece.text if prev_piece else "",
-            )
-            story_piece.text = response.story_text
-            story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt
+            with dspy.context(lm=self.lm):
+                response = story_gen(
+                    instruction=self.instructions,
+                    story_description=story_description,
+                    story_worldview=story_worldview,
+                    story_genres=self.genres,
+                    story_writing_style=self.writing_style,
+                    should_gen_thumbnail_prompt=str(self.gen_thumbnail_prompt),
+                    prev_piece=prev_piece.text if prev_piece else "",
+                )
+                story_piece.text = response.story_text
+                if not story_piece.text:
+                    self.logger.error("Failed to generate the text for the story piece.")
+                    raise ValueError(f"Failed to generate the text for the story piece, {response}")
+                else:
+                    story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt
+                    self.logger.info("Successfully generated story piece.")
+        except Exception as e:
+            self.logger.error(f"An error occurred: {str(e)}")
+            raise
 
 
 class ThumbnailGenerator(dspy.Module):
@@ -168,11 +176,11 @@ class ThumbnailGenerator(dspy.Module):
         self.root_save_folder = config.get("root_save_folder", "outputs")
         self.save_folder = config.get("thumbnail_save_folder", "thumbnails")
 
-    def forward(self, story_piece: StoryPiece) -> None:
+    def forward(self, story_piece: StoryPiece, story: Story) -> None:
         """Generate the thumbnail for the given story piece."""
-        self.generate(story_piece)
+        self.generate(story_piece=story_piece, story=story)
 
-    def generate(self, story_piece: StoryPiece) -> None:
+    def generate(self, story_piece: StoryPiece, story: Story) -> None:
         """Generate the thumbnail based on the prompt in the story piece."""
 
         genres = self.config.get("genres", "")
@@ -185,17 +193,17 @@ class ThumbnailGenerator(dspy.Module):
         response = self.client.images.generate(
             model="dall-e-2",
             prompt=enhanced_prompt,
-            size="256x256",
+            size="512x512",
             quality="standard",
             n=1,
         )
 
         image_url = response.data[0].url
-        thumbnail_path = os.path.join(self.save_folder, f"thumbnail_{story_piece.idx}.png")
-        save_path = os.path.join(self.root_save_folder, thumbnail_path)
+        thumbnail_name = f"thumbnail_{story_piece.idx}.png"
+        save_path = os.path.join(story.story_folder_path, thumbnail_name)
 
         downloaded_path = download_and_save_image(image_url, save_path)
-        story_piece.image_uri = thumbnail_path
+        story_piece.image_uri = thumbnail_name
 
         self.logger.info(f"Generated thumbnail for story piece {story_piece.idx}, saved at: {downloaded_path}")
 
@@ -278,6 +286,7 @@ class OneStepStoryGenerator(StoryGenerator):
         self.logger.tool_log("Generating story sketch...")
         sketch_response = self.story_sketch_generator(simple_prompt=prompt, num_sections=num_sections)
 
+        story_title = sketch_response.story_title.replace("Story Title:", "").strip()
         story_worldview = sketch_response.story_worldview
         try:
             prompts = json.loads(sketch_response.prompts)["prompts"]
@@ -285,7 +294,8 @@ class OneStepStoryGenerator(StoryGenerator):
             raise ValueError(f"Failed to decode the prompts: {sketch_response.prompts}")
 
         # Generate the story pieces
-        story_pieces = []
+        story = Story(config=self.config, title=story_title, genres=self.genres)
+        prev_story_piece = None
         for i, prompt in enumerate(prompts):
             self.logger.info(f"Generating story piece {i+1} with prompt: {prompt}...")
             story_piece = StoryPiece(idx=i)
@@ -293,14 +303,14 @@ class OneStepStoryGenerator(StoryGenerator):
                 prompt=prompt,
                 story_worldview=story_worldview,
                 story_piece=story_piece,
-                prev_piece=story_pieces[i - 1] if i > 0 else None,
+                prev_piece=prev_story_piece,
             )
             # Generate thumbnail if enabled
             if self.gen_thumbnail_prompt:
-                self.thumbnail_generator(story_piece)
-            story_pieces.append(story_piece)
+                self.thumbnail_generator(story_piece=story_piece, story=story)
+            story.add_piece(story_piece)
 
-        return Story(pieces=story_pieces, genres=self.genres)
+        return story
 
     def _stop_condition_met(self) -> bool:
         return True
