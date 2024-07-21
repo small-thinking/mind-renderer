@@ -1,9 +1,9 @@
 story: >
-  写一个儿童故事，用于正面影响小朋友注意卫生。并且喜欢吃蔬菜。
+  写一个儿童故事，用于正面影响小朋友注意卫生，并且喜欢吃蔬菜。潜移默化中，让小朋友养成良好的生活习惯。
 
 # The number of sections or episodes in the story
 num_sections: 4
-section_length: 200
+
 
 # Comma-separated list of genres for the story
 genres: "fantasy,scifi"
@@ -13,6 +13,8 @@ writing_style: "third person"
 
 # Save folder, don't change until you know what you are doing
 root_save_folder: "outputs"
+log_folder: "logs"
+log_level: INFO
 
 # Whether to generate a thumbnail prompt for the story
 image_model:
@@ -20,9 +22,12 @@ image_model:
   thumbnail_save_folder: "thumbnails"
   thumbnail_generation_model: dall-e-2
   thumbnail_size: 512x512
+  # thumbnail_size: 1024x1024
   thumbnail_quality: standard
 
 text_model:
+  # The maximum number of tokens to generate for the story
+  section_length: 500
 
   # The AI provider to use for generating the story, supported: DeepSeek, OpenAI, GROQ, Claude
   provider: "OpenAI"

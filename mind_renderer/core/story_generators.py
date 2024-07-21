@@ -22,17 +22,20 @@ class StorySketchGenerator(dspy.Module):
     """StorySketchGenerator is used to expand a simple prompt into detailed piece-level prompts."""
 
     instruction: str = """
-        You are the story sketching assistant. Please follow the below instruction:
-
-        0. Generate a sketch for a multi-section story according to the specified number of sections.
-        1. Generate the sketch in the SAME language as the user input,
-            e.g. generate Chinese sketch if user input is Chinese.
-        2. Generate the story_worldview and the detailed piece-level prompts based on the simple prompt.
-            The story_worldview is the high-level description of the story, used to make each piece consistent.
-            Each of the detailed piece-level prompts will be used to generate a piece of the story.
-        3. Each section should be coherent and complementary of the others.
-        4. The story in combination should be complete. So the story pieces can be logically connected.
-        5. Generate the prompt per section in the same language as the input prompt.
+    You are the story sketching assistant. Please follow the below instruction:
+    
+    1. Story Sketch Generation: Create a sketch for a multi-section story according to the specified number of
+    sections.
+    2. Language Consistency: Ensure the sketch is generated in the SAME language as the user input. For example,
+    generate the sketch in Chinese if the user input is in Chinese.
+    3. Worldview and Detailed Prompts: Based on the simple prompt provided:
+    3.1. Generate the story worldview, which is a high-level description of the story to ensure consistency across
+    sections.
+    3.2. Create detailed piece-level prompts for each section, which will be used to generate individual parts of the
+    story.
+    4. Coherence and Complementarity: Each section should be coherent within itself and complement the other sections.
+    5. Logical Connectivity: Ensure the entire story, when combined, forms a complete and logically connected narrative.
+    6. Section-Specific Prompts: Generate prompts for each section in the same language as the input prompt.
     """
 
     class SketchGenerateSignature(dspy.Signature):
@@ -59,10 +62,10 @@ class StorySketchGenerator(dspy.Module):
             """
         )
 
-    def __init__(self, config_loader: ConfigLoader, text_model_config: dict[str, str]):
-        self.logger = Logger(__name__)
+    def __init__(self, config_loader: ConfigLoader, logger: Logger):
+        self.logger = logger
         self.config_loader = config_loader
-        self.lm = init_lm(self.config_loader)
+        self.lm = init_lm(self.config_loader, logger=self.logger)
         self.sketch_inspect_length = int(os.getenv("SKETCH_INSPECT_LENGTH", 0))
 
     def forward(self, simple_prompt: str, num_sections: int, **kwargs):
@@ -83,15 +86,22 @@ class TextGenerator(dspy.Module):
     """TextGenerator is used to generate the text element of the story piece based on the prompt."""
 
     instructions = """
-    You are the story writing assistant. Your goal is to generate a story piece a time based on the prompt.
-    Please generate the story piece in the SAME language as the input prompt.
-    Please put the clean generated text in the output field.
+    You are the story writing assistant that generates one story piece a time based on the prompt.
+    ### General guidelines:
+    1. Please generate the story piece in the SAME language as the input prompt.
+    """
+
+    post_process_instructions = """
+    You are the post-processing assistant that refines the generated story piece.
+    The raw story piece generated may contain some errors or uncleaned tags,
+    we only need the actual story content in the section of story text.
+    Please only return the cleaned story text.
     """
 
     class TextGenerateSignature(dspy.Signature):
         """Signature for the generate method."""
 
-        instruction: str = dspy.InputField(desc="The instruction for the generation.")
+        instruction: str = dspy.InputField(desc="The instruction for the generation to strictly follow.")
         story_description: str = dspy.InputField(desc="The description of the story at the high level.")
         story_worldview: str = dspy.InputField(desc="The story_worldview of the story.")
         story_genres: str = dspy.InputField(desc="The genres of the story, e.g. horror, romance, etc.")
@@ -108,10 +118,17 @@ class TextGenerator(dspy.Module):
             desc="The cohensive prompt for generating the thumbnail image in English only. Use descriptive keywords."
         )
 
-    def __init__(self, config_loader: ConfigLoader, text_model_config: dict[str, str]):
-        self.logger = Logger(__name__)
+    class PostProcessSignature(dspy.Signature):
+        """Signature for the post_process method."""
+
+        instruction: str = dspy.InputField(desc="The instruction for the post-processing.")
+        raw_text: str = dspy.InputField(desc="The story piece to be post-processed.")
+        story_text: str = dspy.OutputField(desc="The cleaned story text.")
+
+    def __init__(self, config_loader: ConfigLoader, logger: Logger):
+        self.logger = logger
         self.config_loader = config_loader
-        self.lm = init_lm(self.config_loader)
+        self.lm = init_lm(self.config_loader, logger=self.logger)
         self.genres = self.config_loader.get_value("genres", "")
         self.writing_style = self.config_loader.get_value("writing_style", "")
         self.gen_thumbnail_prompt = self.config_loader.get_value("image_model.gen_thumbnail", False)
@@ -142,7 +159,8 @@ class TextGenerator(dspy.Module):
     ) -> None:
         try:
             self.logger.debug("Attempting to generate story piece...")
-            story_gen = dspy.ChainOfThoughtWithHint(self.TextGenerateSignature)
+            story_gen = dspy.Predict(self.TextGenerateSignature)
+            story_post_process = dspy.Predict(self.PostProcessSignature)
 
             with dspy.context(lm=self.lm):
                 response = story_gen(
@@ -154,13 +172,18 @@ class TextGenerator(dspy.Module):
                     should_gen_thumbnail_prompt=str(self.gen_thumbnail_prompt),
                     prev_piece=prev_piece.text if prev_piece else "",
                 )
-                story_piece.text = response.story_text
+                post_process_response = story_post_process(
+                    instruction=self.post_process_instructions, raw_text=response.story_text
+                )
+                story_piece.text = post_process_response.story_text.replace("Story Text:", "").strip()
                 if not story_piece.text:
                     self.logger.error("Failed to generate the text for the story piece.")
                     raise ValueError(f"Failed to generate the text for the story piece, {response}")
-                else:
-                    story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt
-                    self.logger.debug("Successfully generated story piece.")
+                story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt.replace(
+                    "Thumbnail Generation Prompt:", ""
+                ).strip()
+                self.logger.info(f"Generated story piece text:\n{story_piece.text}")
+                self.logger.info(f"Generated thumbnail prompt:\n{story_piece.thumbnail_gen_prompt}")
         except Exception as e:
             self.logger.error(f"An error occurred: {str(e)}")
             raise
@@ -169,8 +192,8 @@ class TextGenerator(dspy.Module):
 class ThumbnailGenerator(dspy.Module):
     """ThumbnailGenerator is used to generate thumbnail images for story pieces."""
 
-    def __init__(self, config_loader: ConfigLoader):
-        self.logger = Logger(__name__)
+    def __init__(self, config_loader: ConfigLoader, logger: Logger):
+        self.logger = logger
         self.config_loader = config_loader
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
         self.root_save_folder = self.config_loader.get_value("root_save_folder", "outputs")
@@ -217,21 +240,17 @@ class StoryGenerator(dspy.Module):
 
     def __init__(
         self,
-        genres: str,
-        writing_style: str,
-        gen_thumbnail_prompt: bool,
-        provider: str = None,
-        lm_name: str = None,
         **kwargs,
     ):
         load_dotenv(override=True)
         self.state: dict[str, any]
-        self.logger = Logger(__name__)
-        self.genres = genres
-        self.writing_style = writing_style
-        self.gen_thumbnail_prompt = gen_thumbnail_prompt
-        self.provider = provider
-        self.lm_name = lm_name
+        self.config_loader = ConfigLoader()
+        self.logger = Logger(__name__, parent_folder=self.config_loader.get_value("root_save_folder", "outputs"))
+        self.genres = self.config_loader.get_value("genres", "")
+        self.writing_style = self.config_loader.get_value("writing_style", "")
+        self.gen_thumbnail_prompt = self.config_loader.get_value("image_model.gen_thumbnail", False)
+        self.provider = self.config_loader.get_value("text_model.provider")
+        self.lm_name = self.config_loader.get_value("text_model.lm_name")
         self.temperature = kwargs.get("temperature", 0.7)
 
     @abstractmethod
@@ -259,24 +278,11 @@ class StoryGenerator(dspy.Module):
 
 
 class OneStepStoryGenerator(StoryGenerator):
-    def __init__(self, config_path: str):
-        self.logger = Logger(__name__)
-        self.config_loader = ConfigLoader(config_path)
-        text_model_config = self.config_loader.get_text_model_config()
-
-        super().__init__(
-            genres=self.config_loader.get_value("genres", ""),
-            writing_style=self.config_loader.get_value("writing_style", ""),
-            gen_thumbnail_prompt=self.config_loader.get_value("image_model.gen_thumbnail", False),
-            provider=self.config_loader.get_value("text_model.provider"),
-            lm_name=self.config_loader.get_value("text_model.lm_name"),
-        )
-
-        self.story_sketch_generator = StorySketchGenerator(
-            config_loader=self.config_loader, text_model_config=text_model_config
-        )
-        self.text_generator = TextGenerator(config_loader=self.config_loader, text_model_config=text_model_config)
-        self.thumbnail_generator = ThumbnailGenerator(config_loader=self.config_loader)
+    def __init__(self):
+        super().__init__()
+        self.story_sketch_generator = StorySketchGenerator(config_loader=self.config_loader, logger=self.logger)
+        self.text_generator = TextGenerator(config_loader=self.config_loader, logger=self.logger)
+        self.thumbnail_generator = ThumbnailGenerator(config_loader=self.config_loader, logger=self.logger)
 
     def generate(self, prev_version: Story = None, **kwargs) -> Story:
         prompt = self.config_loader.get_value("story", "")

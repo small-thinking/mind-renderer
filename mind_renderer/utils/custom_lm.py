@@ -14,14 +14,20 @@ from mind_renderer.utils.config_loader import ConfigLoader
 from mind_renderer.utils.logger import Logger
 
 
-def init_lm(config_loader: ConfigLoader) -> dspy.LM:
+def init_lm(config_loader: ConfigLoader, logger: Logger) -> dspy.LM:
     """Initialize the language model based on the configuration."""
     provider = config_loader.get_value("text_model.provider")
     lm_name = config_loader.get_value("text_model.lm_name")
-    section_length = config_loader.get_value("text_model.section_length")
+    section_length = config_loader.get_value("text_model.section_length", 100)
     if provider == "DeepSeek":
         api_key = os.getenv("DEEPSEEK_API_KEY")
-        return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=section_length)
+        return DeepSeek(
+            base_url="https://api.deepseek.com",
+            logger=logger,
+            model=lm_name,
+            api_key=api_key,
+            max_tokens=section_length,
+        )
     elif provider == "GROQ":
         api_key = os.getenv("GROQ_API_KEY")
     elif provider == "OpenAI":
@@ -42,6 +48,7 @@ class DeepSeek(dspy.LM):
 
     def __init__(
         self,
+        logger: Logger,
         model: str = "deepseek-chat",
         api_key: Optional[str] = None,
         api_base: Optional[str] = "https://api.deepseek.com",
@@ -50,7 +57,7 @@ class DeepSeek(dspy.LM):
         **kwargs,
     ):
         super().__init__(model)
-        self.logger = Logger(__name__)
+        self.logger = logger
         self.provider = "openai"
         self.api_base = api_base
         self.system_prompt = system_prompt

@@ -7,6 +7,8 @@ from typing import Optional
 from colorama import Fore, ansi
 from dotenv import load_dotenv
 
+from mind_renderer.utils.config_loader import ConfigLoader
+
 
 class Logger:
     _instance = None
@@ -44,10 +46,13 @@ class Logger:
             cls._instance = super().__new__(cls)
         return cls._instance
 
-    def __init__(self, logger_name: str, verbose: bool = True, level: Optional[LoggingLevel] = None):
+    def __init__(
+        self, logger_name: str, parent_folder: str, verbose: bool = True, level: Optional[LoggingLevel] = None
+    ):
         if not hasattr(self, "logger"):
             load_dotenv(override=True)
-            self.logging_level = level if level else Logger.LoggingLevel[os.getenv("LOGGING_LEVEL", "INFO")]
+            self.config = ConfigLoader()
+            self.logging_level = level if level else Logger.LoggingLevel[self.config.get_value("log_level", "INFO")]
             self.logger = logging.getLogger(logger_name)
             self.logger.setLevel(level=self.logging_level.value)
 
@@ -61,37 +66,52 @@ class Logger:
             self.console_handler.setFormatter(self.formatter)
             self.logger.addHandler(self.console_handler)
 
-    def log(self, message: str, level: LoggingLevel, color: str = ansi.Fore.GREEN) -> None:
+            # File handler
+            log_folder_root = self.config.get_value("logger.folder_root", "logs")
+            log_folder = os.path.join(log_folder_root, parent_folder)
+            if not os.path.exists(log_folder):
+                os.makedirs(log_folder)
+            log_file = os.path.join(log_folder, f"{logger_name}.log")
+            self.file_handler = logging.FileHandler(log_file)
+            self.file_handler.setLevel(level=self.logging_level.value)
+            self.file_handler.setFormatter(self.formatter)
+            self.logger.addHandler(self.file_handler)
+
+    def log(self, message: str, level: LoggingLevel, color: str = ansi.Fore.GREEN, write_to_file: bool = False) -> None:
         if level >= self.logging_level:
             if len(inspect.stack()) >= 4:
-                caller_frame = inspect.stack()[2]
+                caller_frame = inspect.stack()[3]
             else:
                 caller_frame = inspect.stack()[2]
-            caller_name = caller_frame[3]
-            caller_line = caller_frame[2]
+            caller_name = caller_frame.function
+            caller_line = caller_frame.lineno
             message = f"{caller_name}({caller_line}): {message}"
-            self.logger.info(color + message + Fore.RESET)
+            log_message = color + message + Fore.RESET
+            self.logger.info(log_message)
+            if write_to_file:
+                self.file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
+                self.logger.info(message)
 
-    def debug(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.DEBUG, Fore.BLACK)
+    def debug(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.DEBUG, Fore.BLACK, write_to_file)
 
-    def info(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.INFO, Fore.WHITE)
+    def info(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.INFO, Fore.WHITE, write_to_file)
 
-    def tool_log(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.TOOL, Fore.YELLOW)
+    def tool_log(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.TOOL, Fore.YELLOW, write_to_file)
 
-    def task_log(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.TASK, Fore.BLUE)
+    def task_log(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.TASK, Fore.BLUE, write_to_file)
 
-    def thought_process_log(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.THOUGHT_PROCESS, Fore.GREEN)
+    def thought_process_log(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.THOUGHT_PROCESS, Fore.GREEN, write_to_file)
 
-    def warning(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.WARNING, Fore.YELLOW)
+    def warning(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.WARNING, Fore.YELLOW, write_to_file)
 
-    def error(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.ERROR, Fore.RED)
+    def error(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.ERROR, Fore.RED, write_to_file)
 
-    def critical(self, message: str) -> None:
-        self.log(message, Logger.LoggingLevel.CRITICAL, Fore.MAGENTA)
+    def critical(self, message: str, write_to_file: bool = False) -> None:
+        self.log(message, Logger.LoggingLevel.CRITICAL, Fore.MAGENTA, write_to_file)
