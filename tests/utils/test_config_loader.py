@@ -20,7 +20,7 @@ class TestConfigLoader:
             "genres": "fantasy,scifi",
             "writing_style": "third person",
             "gen_thumbnail": True,
-            "text_models": {"provider": "DeepSeek", "lm_name": "deep-seek-chat"},
+            "text_model": {"provider": "DeepSeek", "lm_name": "deep-seek-chat"},
         }
 
     @patch("os.path.exists")

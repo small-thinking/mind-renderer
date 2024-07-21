@@ -24,3 +24,12 @@ class ConfigLoader:
 
     def get_text_model_config(self) -> Dict[str, str]:
         return self.config.get("text_models", {})
+
+    def get_value(self, key: str, default=None) -> str:
+        keys = key.split(".")
+        value = self.config
+        for k in keys:
+            value = value.get(k, {})
+            if not value:
+                return None
+        return value
