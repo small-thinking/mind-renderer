@@ -59,10 +59,10 @@ class StorySketchGenerator(dspy.Module):
             """
         )
 
-    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
+    def __init__(self, config_loader: ConfigLoader, text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
-        self.text_model_config = text_model_config
-        self.lm = init_lm(self.text_model_config)
+        self.config_loader = config_loader
+        self.lm = init_lm(self.config_loader)
         self.sketch_inspect_length = int(os.getenv("SKETCH_INSPECT_LENGTH", 0))
 
     def forward(self, simple_prompt: str, num_sections: int, **kwargs):
@@ -85,6 +85,7 @@ class TextGenerator(dspy.Module):
     instructions = """
     You are the story writing assistant. Your goal is to generate a story piece a time based on the prompt.
     Please generate the story piece in the SAME language as the input prompt.
+    Please put the clean generated text in the output field.
     """
 
     class TextGenerateSignature(dspy.Signature):
@@ -107,14 +108,13 @@ class TextGenerator(dspy.Module):
             desc="The cohensive prompt for generating the thumbnail image in English only. Use descriptive keywords."
         )
 
-    def __init__(self, config: dict[str, any], text_model_config: dict[str, str]):
+    def __init__(self, config_loader: ConfigLoader, text_model_config: dict[str, str]):
         self.logger = Logger(__name__)
-        self.config = config
-        self.text_model_config = text_model_config
-        self.lm = init_lm(self.text_model_config)
-        self.genres = config["genres"]
-        self.writing_style = config["writing_style"]
-        self.gen_thumbnail_prompt = config["gen_thumbnail"]
+        self.config_loader = config_loader
+        self.lm = init_lm(self.config_loader)
+        self.genres = self.config_loader.get_value("genres", "")
+        self.writing_style = self.config_loader.get_value("writing_style", "")
+        self.gen_thumbnail_prompt = self.config_loader.get_value("image_model.gen_thumbnail", False)
 
     def forward(
         self, prompt: str, story_worldview: str, story_piece: StoryPiece, prev_piece: StoryPiece = None, **kwargs
@@ -141,7 +141,7 @@ class TextGenerator(dspy.Module):
         **kwargs,
     ) -> None:
         try:
-            self.logger.info("Attempting to generate story piece...")
+            self.logger.debug("Attempting to generate story piece...")
             story_gen = dspy.ChainOfThoughtWithHint(self.TextGenerateSignature)
 
             with dspy.context(lm=self.lm):
@@ -160,7 +160,7 @@ class TextGenerator(dspy.Module):
                     raise ValueError(f"Failed to generate the text for the story piece, {response}")
                 else:
                     story_piece.thumbnail_gen_prompt = response.thumbnail_generation_prompt
-                    self.logger.info("Successfully generated story piece.")
+                    self.logger.debug("Successfully generated story piece.")
         except Exception as e:
             self.logger.error(f"An error occurred: {str(e)}")
             raise
@@ -169,12 +169,14 @@ class TextGenerator(dspy.Module):
 class ThumbnailGenerator(dspy.Module):
     """ThumbnailGenerator is used to generate thumbnail images for story pieces."""
 
-    def __init__(self, config: dict[str, any]):
+    def __init__(self, config_loader: ConfigLoader):
         self.logger = Logger(__name__)
-        self.config = config
+        self.config_loader = config_loader
         self.client = OpenAI(api_key=os.getenv("OPENAI_API_KEY"))
-        self.root_save_folder = config.get("root_save_folder", "outputs")
-        self.save_folder = config.get("thumbnail_save_folder", "thumbnails")
+        self.root_save_folder = self.config_loader.get_value("root_save_folder", "outputs")
+        self.save_folder = os.path.join(
+            self.root_save_folder, self.config_loader.get_value("image_model.thumbnail_save_folder", "thumbnails")
+        )
 
     def forward(self, story_piece: StoryPiece, story: Story) -> None:
         """Generate the thumbnail for the given story piece."""
@@ -183,7 +185,7 @@ class ThumbnailGenerator(dspy.Module):
     def generate(self, story_piece: StoryPiece, story: Story) -> None:
         """Generate the thumbnail based on the prompt in the story piece."""
 
-        genres = self.config.get("genres", "")
+        genres = self.config_loader.get_value("genres", "")
         enhanced_prompt = f"""
         Generate a thumbnail image for the story piece. The story piece is part of a whole story.
         The genres of the story are: {genres}.
@@ -191,10 +193,10 @@ class ThumbnailGenerator(dspy.Module):
         """
 
         response = self.client.images.generate(
-            model="dall-e-2",
+            model=self.config_loader.get_value("image_model.thumbnail_generation_model", "dall-e-2"),
             prompt=enhanced_prompt,
-            size="512x512",
-            quality="standard",
+            size=self.config_loader.get_value("image_model.thumbnail_size", "256x256"),
+            quality=self.config_loader.get_value("image_model.thumbnail_quality", 100),
             n=1,
         )
 
@@ -260,25 +262,25 @@ class OneStepStoryGenerator(StoryGenerator):
     def __init__(self, config_path: str):
         self.logger = Logger(__name__)
         self.config_loader = ConfigLoader(config_path)
-        self.config = self.config_loader.get_config()
         text_model_config = self.config_loader.get_text_model_config()
 
         super().__init__(
-            genres=self.config.get("genres", ""),
-            writing_style=self.config.get("writing_style", ""),
-            gen_thumbnail_prompt=self.config.get("gen_thumbnail", False),
-            provider=text_model_config.get("provider"),
-            lm_name=text_model_config.get("lm_name"),
+            genres=self.config_loader.get_value("genres", ""),
+            writing_style=self.config_loader.get_value("writing_style", ""),
+            gen_thumbnail_prompt=self.config_loader.get_value("image_model.gen_thumbnail", False),
+            provider=self.config_loader.get_value("text_model.provider"),
+            lm_name=self.config_loader.get_value("text_model.lm_name"),
         )
 
-        self.story_sketch_generator = StorySketchGenerator(config=self.config, text_model_config=text_model_config)
-        self.text_generator = TextGenerator(config=self.config, text_model_config=text_model_config)
-        self.thumbnail_generator = ThumbnailGenerator(config=self.config)
+        self.story_sketch_generator = StorySketchGenerator(
+            config_loader=self.config_loader, text_model_config=text_model_config
+        )
+        self.text_generator = TextGenerator(config_loader=self.config_loader, text_model_config=text_model_config)
+        self.thumbnail_generator = ThumbnailGenerator(config_loader=self.config_loader)
 
     def generate(self, prev_version: Story = None, **kwargs) -> Story:
-        config = self.config_loader.get_config()
-        prompt = config.get("story", "")
-        num_sections = config.get("num_sections", 4)
+        prompt = self.config_loader.get_value("story", "")
+        num_sections = self.config_loader.get_value("num_sections", 4)
 
         self.logger.tool_log(f"Generating a {num_sections} pieces story with prompt: {prompt}...")
 
@@ -294,7 +296,7 @@ class OneStepStoryGenerator(StoryGenerator):
             raise ValueError(f"Failed to decode the prompts: {sketch_response.prompts}")
 
         # Generate the story pieces
-        story = Story(config=self.config, title=story_title, genres=self.genres)
+        story = Story(config_loader=self.config_loader, title=story_title, genres=self.genres)
         prev_story_piece = None
         for i, prompt in enumerate(prompts):
             self.logger.info(f"Generating story piece {i+1} with prompt: {prompt}...")

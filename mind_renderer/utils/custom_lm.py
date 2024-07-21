@@ -10,14 +10,15 @@ import backoff
 import dspy
 import requests
 
+from mind_renderer.utils.config_loader import ConfigLoader
 from mind_renderer.utils.logger import Logger
 
 
-def init_lm(text_model_config: dict[str, str]) -> dspy.LM:
+def init_lm(config_loader: ConfigLoader) -> dspy.LM:
     """Initialize the language model based on the configuration."""
-    provider = text_model_config["provider"]
-    lm_name = text_model_config["lm_name"]
-    section_length = text_model_config.get("section_length", 1000)
+    provider = config_loader.get_value("text_model.provider")
+    lm_name = config_loader.get_value("text_model.lm_name")
+    section_length = config_loader.get_value("text_model.section_length")
     if provider == "DeepSeek":
         api_key = os.getenv("DEEPSEEK_API_KEY")
         return DeepSeek(base_url="https://api.deepseek.com", model=lm_name, api_key=api_key, max_tokens=section_length)

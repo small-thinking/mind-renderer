@@ -50,6 +50,11 @@ class Logger:
             self.logging_level = level if level else Logger.LoggingLevel[os.getenv("LOGGING_LEVEL", "INFO")]
             self.logger = logging.getLogger(logger_name)
             self.logger.setLevel(level=self.logging_level.value)
+
+            # Remove all existing handlers
+            if self.logger.hasHandlers():
+                self.logger.handlers.clear()
+
             self.formatter = logging.Formatter("%(asctime)s %(levelname)s %(message)s (%(filename)s:%(lineno)d)")
             self.console_handler = logging.StreamHandler()
             self.console_handler.setLevel(level=self.logging_level.value)

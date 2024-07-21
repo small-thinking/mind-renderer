@@ -5,6 +5,8 @@ import os
 import time
 from typing import List
 
+from mind_renderer.utils.config_loader import ConfigLoader
+
 
 class StoryPiece:
     """A piece is a part of a story.
@@ -46,7 +48,7 @@ class Story:
 
     def __init__(
         self,
-        config: dict[str, any],
+        config_loader: ConfigLoader,
         title: str,
         genres: str,
         visual_style: str = None,
@@ -62,6 +64,7 @@ class Story:
             audio_style (str, optional): The audio style of the story, story telling. Defaults to None.
             pieces (List[StoryPiece], optional): The pieces of the story. Defaults to None.
         """
+        self.config_loader = config_loader
         # Created timestamp
         self.created_timestamp = str(int(time.time()))
         self.title = title
@@ -70,7 +73,9 @@ class Story:
         self.audio_style = audio_style
         self.pieces = pieces or []
         story_folder_name = os.path.join(f"{self.created_timestamp}-{self.title}")
-        self.story_folder_path = os.path.join(config.get("output_path", "outputs"), story_folder_name)
+        self.story_folder_path = os.path.join(
+            self.config_loader.get_value("root_save_folder", "outputs"), story_folder_name
+        )
         # Create the story folder
         os.makedirs(self.story_folder_path, exist_ok=True)
 

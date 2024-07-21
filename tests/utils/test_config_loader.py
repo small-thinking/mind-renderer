@@ -20,7 +20,7 @@ class TestConfigLoader:
             "genres": "fantasy,scifi",
             "writing_style": "third person",
             "gen_thumbnail": True,
-            "text_models": {"provider": "DeepSeek", "lm_name": "deep-seek-chat"},
+            "text_model": {"provider": "DeepSeek", "lm_name": "deep-seek-chat"},
         }
 
     @patch("os.path.exists")
@@ -41,7 +41,7 @@ class TestConfigLoader:
         mock_config = yaml.dump(sample_config)
         with patch("builtins.open", mock_open(read_data=mock_config)):
             config_loader = ConfigLoader("mock_config.yaml")
-            assert config_loader.get_text_model_config() == {"provider": "DeepSeek", "lm_name": "deep-seek-chat"}
+            assert config_loader.get_value("text_model") == sample_config["text_model"]
 
     @patch("os.path.exists")
     def test_get_text_model_config_missing(self, mock_exists):
@@ -50,4 +50,4 @@ class TestConfigLoader:
         mock_config = yaml.dump(config_without_text_models)
         with patch("builtins.open", mock_open(read_data=mock_config)):
             config_loader = ConfigLoader("mock_config.yaml")
-            assert config_loader.get_text_model_config() == {}
+            assert config_loader.get_value("text_model", {}) == {}
