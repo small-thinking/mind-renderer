@@ -30,6 +30,4 @@ class ConfigLoader:
         value = self.config
         for k in keys:
             value = value.get(k, {})
-            if not value:
-                return None
-        return value
+        return value or default
