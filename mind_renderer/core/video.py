@@ -15,23 +15,9 @@ class RunwayHTTPClient:
         Args:
             session (Optional[aiohttp.ClientSession]): An optional aiohttp ClientSession to use for requests.
         """
-        self.url = "https://api.302.ai/runway/submit"
-        load_dotenv(override=True)
-        self.api_key = api_key if api_key else os.getenv("302AI_API_KEY", "test_api_key")
-
-        self.headers = {"Authorization: Bearer ": f"{self.api_key}", "User-Agent": "Apifox/1.0.0 (https://apifox.com)"}
-        self.session = session
-
-    def __init__(self, session: Optional[aiohttp.ClientSession] = None, api_key: str = "") -> None:
-        """
-        Initializes the HTTPClient with the URL and headers.
-
-        Args:
-            session (Optional[aiohttp.ClientSession]): An optional aiohttp ClientSession to use for requests.
-        """
         self.base_url = "https://api.302.ai"
         load_dotenv(override=True)
-        self.api_key = api_key or os.getenv("302AI_API_KEY")
+        self.api_key = api_key if api_key else os.getenv("302AI_API_KEY", "test_api_key")
 
         self.headers = {"Authorization": f"Bearer {self.api_key}", "User-Agent": "Apifox/1.0.0 (https://apifox.com)"}
         self.session = session
