@@ -23,7 +23,7 @@ class StorySketchGenerator(dspy.Module):
 
     instruction: str = """
     You are the story sketching assistant. Please follow the below instruction:
-    
+
     1. Story Sketch Generation: Create a sketch for a multi-section story according to the specified number of
     sections.
     2. Language Consistency: Ensure the sketch is generated in the SAME language as the user input. For example,
