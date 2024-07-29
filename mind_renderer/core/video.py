@@ -1,10 +1,21 @@
+"""
+Run video generation with command:
+    poetry run python mind_renderer/core/video.py submit --prompt the prompt
+    
+Fetch generated video with command:
+    poetry run python mind_renderer/core/video.py fetch --task_id runway_f2450ac24c1e
+"""
+
 import argparse
 import asyncio
+import json
 import os
 from typing import Any, Dict, Optional
 
 import aiohttp
 from dotenv import load_dotenv
+
+from mind_renderer.utils.logger import Logger
 
 
 class RunwayHTTPClient:
@@ -16,6 +27,7 @@ class RunwayHTTPClient:
             session (Optional[aiohttp.ClientSession]): An optional aiohttp ClientSession to use for requests.
         """
         self.base_url = "https://api.302.ai"
+        self.logger = Logger(__name__)
         load_dotenv(override=True)
         self.api_key = api_key if api_key else os.getenv("302AI_API_KEY", "test_api_key")
 
@@ -45,29 +57,56 @@ class RunwayHTTPClient:
                 async with session.post(url, headers=self.headers, data=data) as response:
                     return await response.json()
 
-    async def fetch_generated_image(self, task_id: str) -> str:
+    async def fetch_generated_video(self, task_id: str) -> str:
         """
-        Fetches the generated image for a given task ID and saves it as an MP4 file.
+        Fetches the generated video for a given task ID and saves it as an MP4 file.
 
         Args:
-            task_id (str): The ID of the task to fetch the image for.
+            task_id (str): The ID of the task to fetch the video for.
+            session (Optional[aiohttp.ClientSession]): An optional aiohttp ClientSession to use for requests.
 
         Returns:
             str: The path to the saved MP4 file.
         """
         url = f"{self.base_url}/runway/task/{task_id}/fetch"
 
-        if self.session:
-            async with self.session.get(url, headers=self.headers) as response:
+        generated_video_path = None
+        async with aiohttp.ClientSession() as session:
+            async with session.get(url, headers=self.headers) as response:
                 data = await response.read()
-        else:
-            async with aiohttp.ClientSession() as session:
-                async with session.get(url, headers=self.headers) as response:
-                    data = await response.read()
+                decoded_data = data.decode("utf-8")
+                response_json = json.loads(decoded_data)
+                if "task" not in response_json:
+                    self.logger.error(f"Error fetching generated video: {response_json}")
+                    return
+                task_blob = response_json["task"]
+                if "status" not in task_blob:
+                    self.logger.error(f"Error fetching generated video: {task_blob}")
+                    return
+                status = task_blob["status"]
+                if status == "PENDING":
+                    self.logger.info("Task is still pending...")
+                    return
+                elif status == "RUNNING":
+                    self.logger.info("Task is still running...")
+                    return
+                elif status == "SUCCEEDED":
+                    generated_video_path = task_blob["artifacts"][0]["url"]
+                    self.logger.info(f"Generated video path: {generated_video_path}")
+                else:
+                    self.logger.error(f"Task failed with status: {status}, Response: {task_blob}")
+                    return
 
         file_path = f"{task_id}.mp4"
-        with open(file_path, "wb") as f:
-            f.write(data)
+        # Download mp4 from given url
+        if generated_video_path:
+            self.logger.info(f"Downloading generated video from: {generated_video_path}...")
+            async with aiohttp.ClientSession() as session:
+                async with session.get(generated_video_path) as response:
+                    data = await response.read()
+                    with open(file_path, "wb") as f:
+                        f.write(data)
+            self.logger.info(f"Generated video saved as: {file_path}")
 
         return file_path
 
@@ -87,8 +126,8 @@ def parse_arg() -> argparse.Namespace:
     submit_parser.add_argument("--seconds", type=int, default=10, help="The duration in seconds.")
     submit_parser.add_argument("--seed", type=str, default="", help="The seed value.")
 
-    fetch_parser = subparsers.add_parser("fetch", help="Fetch a generated image")
-    fetch_parser.add_argument("--task_id", type=str, required=True, help="The ID of the task to fetch the image for.")
+    fetch_parser = subparsers.add_parser("fetch", help="Fetch a generated video")
+    fetch_parser.add_argument("--task_id", type=str, required=True, help="The ID of the task to fetch the video for.")
 
     return parser.parse_args()
 
@@ -98,12 +137,13 @@ if __name__ == "__main__":
     client = RunwayHTTPClient()
 
     if args.command == "submit":
-        asyncio.run(
+        response = asyncio.run(
             client.send_post_request(
                 prompt=args.prompt,
                 seconds=args.seconds,
                 seed=args.seed,
             )
         )
+        print(f"Response: {response}")
     elif args.command == "fetch":
-        asyncio.run(client.fetch_generated_image(task_id=args.task_id))
+        asyncio.run(client.fetch_generated_video(task_id=args.task_id))
