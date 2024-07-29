@@ -1,12 +1,13 @@
 story: >
-  写一个儿童故事，用于正面影响小朋友注意卫生，并且喜欢吃蔬菜。潜移默化中，让小朋友养成良好的生活习惯。
+  Generate a series of eposide for healing music scripts. The story content of each episode is the music generation prmopt.
+  We want the topic of the story to be from the perspective of beautify earth forest.
 
 # The number of sections or episodes in the story
 num_sections: 4
 
 
 # Comma-separated list of genres for the story
-genres: "fantasy,scifi"
+genres: "nature, forest, healing music, realistic"
 
 # The writing style to use for the story
 writing_style: "third person"
@@ -22,6 +23,7 @@ image_model:
   thumbnail_save_folder: "thumbnails"
   thumbnail_generation_model: dall-e-2
   thumbnail_size: 512x512
+  # thumbnail_generation_model: dall-e-3
   # thumbnail_size: 1024x1024
   thumbnail_quality: standard
 

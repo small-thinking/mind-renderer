@@ -1,6 +1,7 @@
 import inspect
 import logging
 import os
+import time
 from enum import Enum
 from typing import Optional
 
@@ -47,7 +48,7 @@ class Logger:
         return cls._instance
 
     def __init__(
-        self, logger_name: str, parent_folder: str, verbose: bool = True, level: Optional[LoggingLevel] = None
+        self, logger_name: str, parent_folder: str = "", verbose: bool = True, level: Optional[LoggingLevel] = None
     ):
         if not hasattr(self, "logger"):
             load_dotenv(override=True)
@@ -67,15 +68,17 @@ class Logger:
             self.logger.addHandler(self.console_handler)
 
             # File handler
-            log_folder_root = self.config.get_value("logger.folder_root", "logs")
-            log_folder = os.path.join(log_folder_root, parent_folder)
-            if not os.path.exists(log_folder):
-                os.makedirs(log_folder)
-            log_file = os.path.join(log_folder, f"{logger_name}.log")
-            self.file_handler = logging.FileHandler(log_file)
-            self.file_handler.setLevel(level=self.logging_level.value)
-            self.file_handler.setFormatter(self.formatter)
-            self.logger.addHandler(self.file_handler)
+            if parent_folder:
+                log_folder_root = self.config.get_value("logger.folder_root", "logs")
+                log_folder = os.path.join(parent_folder, log_folder_root)
+                if not os.path.exists(log_folder):
+                    os.makedirs(log_folder)
+                timestamp = str(int(time.time()))
+                log_file = os.path.join(log_folder, f"{timestamp}-{logger_name}.log")
+                self.file_handler = logging.FileHandler(log_file)
+                self.file_handler.setLevel(level=self.logging_level.value)
+                self.file_handler.setFormatter(self.formatter)
+                self.logger.addHandler(self.file_handler)
 
     def log(self, message: str, level: LoggingLevel, color: str = ansi.Fore.GREEN, write_to_file: bool = False) -> None:
         if level >= self.logging_level:
@@ -85,12 +88,35 @@ class Logger:
                 caller_frame = inspect.stack()[2]
             caller_name = caller_frame.function
             caller_line = caller_frame.lineno
-            message = f"{caller_name}({caller_line}): {message}"
-            log_message = color + message + Fore.RESET
-            self.logger.info(log_message)
+            formatted_message = f"{caller_name}({caller_line}): {message}"
+
+            # Console logging
+            console_message = color + formatted_message + Fore.RESET
+            self.console_handler.handle(
+                logging.LogRecord(
+                    name=self.logger.name,
+                    level=level.value,
+                    pathname=caller_frame.filename,
+                    lineno=caller_line,
+                    msg=console_message,
+                    args=None,
+                    exc_info=None,
+                )
+            )
+
+            # File logging
             if write_to_file:
-                self.file_handler.setFormatter(logging.Formatter("%(asctime)s %(levelname)s %(message)s"))
-                self.logger.info(message)
+                self.file_handler.handle(
+                    logging.LogRecord(
+                        name=self.logger.name,
+                        level=level.value,
+                        pathname=caller_frame.filename,
+                        lineno=caller_line,
+                        msg=formatted_message,
+                        args=None,
+                        exc_info=None,
+                    )
+                )
 
     def debug(self, message: str, write_to_file: bool = False) -> None:
         self.log(message, Logger.LoggingLevel.DEBUG, Fore.BLACK, write_to_file)

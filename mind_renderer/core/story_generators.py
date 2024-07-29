@@ -23,10 +23,11 @@ class StorySketchGenerator(dspy.Module):
 
     instruction: str = """
     You are the story sketching assistant. Please follow the below instruction:
-    
+
     1. Story Sketch Generation: Create a sketch for a multi-section story according to the specified number of
     sections.
     2. Language Consistency: Ensure the sketch is generated in the SAME language as the user input. For example,
+    generate the sketch in English if the user input is in English,
     generate the sketch in Chinese if the user input is in Chinese.
     3. Worldview and Detailed Prompts: Based on the simple prompt provided:
     3.1. Generate the story worldview, which is a high-level description of the story to ensure consistency across
@@ -134,10 +135,17 @@ class TextGenerator(dspy.Module):
         self.gen_thumbnail_prompt = self.config_loader.get_value("image_model.gen_thumbnail", False)
 
     def forward(
-        self, prompt: str, story_worldview: str, story_piece: StoryPiece, prev_piece: StoryPiece = None, **kwargs
+        self,
+        idx: str,
+        prompt: str,
+        story_worldview: str,
+        story_piece: StoryPiece,
+        prev_piece: StoryPiece = None,
+        **kwargs,
     ) -> None:
         """Generate the element based on the prompt and populate the story piece with the generated element."""
         self.generate(
+            idx=idx,
             story_description=prompt,
             story_worldview=story_worldview,
             story_piece=story_piece,
@@ -151,6 +159,7 @@ class TextGenerator(dspy.Module):
     )
     def generate(
         self,
+        idx: str,
         story_description: str,
         story_worldview: str,
         story_piece: StoryPiece,
@@ -183,7 +192,9 @@ class TextGenerator(dspy.Module):
                     "Thumbnail Generation Prompt:", ""
                 ).strip()
                 self.logger.info(f"Generated story piece text:\n{story_piece.text}")
-                self.logger.info(f"Generated thumbnail prompt:\n{story_piece.thumbnail_gen_prompt}")
+                self.logger.info(
+                    f"{idx}: Generated thumbnail prompt:\n{story_piece.thumbnail_gen_prompt}", write_to_file=True
+                )
         except Exception as e:
             self.logger.error(f"An error occurred: {str(e)}")
             raise
@@ -245,7 +256,7 @@ class StoryGenerator(dspy.Module):
         load_dotenv(override=True)
         self.state: dict[str, any]
         self.config_loader = ConfigLoader()
-        self.logger = Logger(__name__, parent_folder=self.config_loader.get_value("root_save_folder", "outputs"))
+        self.logger = Logger("story", parent_folder=self.config_loader.get_value("root_save_folder", "outputs"))
         self.genres = self.config_loader.get_value("genres", "")
         self.writing_style = self.config_loader.get_value("writing_style", "")
         self.gen_thumbnail_prompt = self.config_loader.get_value("image_model.gen_thumbnail", False)
@@ -308,6 +319,7 @@ class OneStepStoryGenerator(StoryGenerator):
             self.logger.info(f"Generating story piece {i+1} with prompt: {prompt}...")
             story_piece = StoryPiece(idx=i)
             self.text_generator(
+                idx=f"Section {i+1}",
                 prompt=prompt,
                 story_worldview=story_worldview,
                 story_piece=story_piece,

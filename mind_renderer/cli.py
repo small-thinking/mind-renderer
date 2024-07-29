@@ -4,10 +4,7 @@ Run the following command to generate the story:
     poetry run python mind_renderer/cli.py
 """
 
-import argparse
-
 from mind_renderer.core.story_generators import OneStepStoryGenerator
-from mind_renderer.utils.logger import Logger
 
 
 def main():
