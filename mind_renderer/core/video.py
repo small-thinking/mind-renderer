@@ -1,7 +1,7 @@
 """
 Run video generation with command:
     poetry run python mind_renderer/core/video.py submit --prompt the prompt
-    
+
 Fetch generated video with command:
     poetry run python mind_renderer/core/video.py fetch --task_id runway_f2450ac24c1e
 """
