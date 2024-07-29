@@ -1,5 +1,5 @@
 """Run the test with command:
-    poetry run pytest tests/utils/test_deepseek_lm.py
+    poetry run pytest tests/utils/test_custom_lm.py
 """
 
 from unittest.mock import MagicMock, patch
@@ -8,12 +8,14 @@ import pytest
 import requests
 
 from mind_renderer.utils.custom_lm import DeepSeek
+from mind_renderer.utils.logger import Logger
 
 
 class TestDeepSeek:
     @pytest.fixture
     def deepseek_instance(self):
-        return DeepSeek(model="deepseek-chat", api_key="test_api_key")
+        logger = Logger(__name__)
+        return DeepSeek(model="deepseek-chat", logger=logger, api_key="test_api_key")
 
     def test_init(self, deepseek_instance):
         assert deepseek_instance.provider == "openai"
@@ -22,8 +24,9 @@ class TestDeepSeek:
         assert deepseek_instance.model_type == "chat"
 
     def test_init_without_api_key(self):
+        logger = Logger(__name__)
         with pytest.raises(ValueError, match="API key must be provided"):
-            DeepSeek(model="deepseek-chat")
+            DeepSeek(model="deepseek-chat", logger=logger)
 
     @patch("requests.post")
     def test_basic_request_chat(self, mock_post, deepseek_instance):
@@ -37,7 +40,8 @@ class TestDeepSeek:
 
     @patch("requests.post")
     def test_basic_request_text(self, mock_post):
-        deepseek_instance = DeepSeek(model="deepseek-text", api_key="test_api_key", model_type="text")
+        logger = Logger(__name__)
+        deepseek_instance = DeepSeek(model="deepseek-text", logger=logger, api_key="test_api_key", model_type="text")
         mock_response = MagicMock()
         mock_response.json.return_value = {"choices": [{"text": "Test response"}]}
         mock_post.return_value = mock_response
@@ -61,7 +65,8 @@ class TestDeepSeek:
         assert deepseek_instance._get_choice_text(choice) == "Test content"
 
     def test_get_choice_text_text(self):
-        deepseek_instance = DeepSeek(model="deepseek-text", api_key="test_api_key", model_type="text")
+        logger = Logger(__name__)
+        deepseek_instance = DeepSeek(model="deepseek-text", logger=logger, api_key="test_api_key", model_type="text")
         choice = {"text": "Test content"}
         assert deepseek_instance._get_choice_text(choice) == "Test content"
 
